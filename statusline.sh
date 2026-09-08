@@ -1,7 +1,7 @@
 #!/bin/sh
 # Mocha Powerline — статусная строка для Claude Code.
 # Палитра Catppuccin Mocha, powerline-разделители, сегменты:
-# модель · каталог · git · python · контекст · лимиты подписки · время.
+# модель · каталог · git · python · контекст · аккаунт и лимиты · время.
 #
 # Требуется: jq, Nerd Font в терминале, поддержка truecolor.
 # Установка: положить в ~/.claude/statusline-command.sh и прописать в
@@ -59,6 +59,28 @@ if [ -n "$used_pct" ]; then
   ctx_segment=$(printf ' %.0f%%' "$used_pct")
 fi
 
+# Active claude-acc slot: the pre-authorized account this session runs on.
+# Empty when claude-acc is not in use — then the segment carries limits only.
+acct_segment=""
+acc_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/auth"
+acct_name=""
+[ -r "$acc_dir/.current" ] && acct_name=$(tr -d '[:space:]' < "$acc_dir/.current")
+if [ -n "$acct_name" ]; then
+  # A bare /login moves the live account without touching the slot, so the name
+  # is only trustworthy while the slot email and the live email still agree.
+  if [ -n "$CLAUDE_CONFIG_DIR" ]; then
+    live_config="$CLAUDE_CONFIG_DIR/.claude.json"
+  else
+    live_config="$HOME/.claude.json"
+  fi
+  slot_email=$(jq -r '.email // empty' "$acc_dir/${acct_name}.json" 2>/dev/null)
+  live_email=$(jq -r '.oauthAccount.emailAddress // empty' "$live_config" 2>/dev/null)
+  acct_segment="$acct_name"
+  if [ -n "$slot_email" ] && [ -n "$live_email" ] && [ "$slot_email" != "$live_email" ]; then
+    acct_segment="${acct_name} ✗"
+  fi
+fi
+
 # Claude.ai subscription limits: 5h session window + 7d weekly window.
 # Only present for subscribers, and only after the first API response.
 five_pct=$(printf '%s' "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
@@ -102,6 +124,15 @@ if [ -n "$week_pct" ]; then
   [ -n "$limit_segment" ] && limit_segment="${limit_segment} · "
   limit_segment=$(printf '%s7d %.0f%%' "$limit_segment" "$week_pct")
   [ "${week_pct%%.*}" -ge "$LIMIT_COUNTDOWN" ] 2>/dev/null && limit_segment="${limit_segment}$(countdown "$week_reset")"
+fi
+
+# The account slot leads the segment: whose usage this is, then the usage itself.
+if [ -n "$acct_segment" ]; then
+  if [ -n "$limit_segment" ]; then
+    limit_segment="${acct_segment} · ${limit_segment}"
+  else
+    limit_segment="$acct_segment"
+  fi
 fi
 
 now=$(date '+%R')
@@ -174,7 +205,7 @@ if [ -n "$ctx_segment" ]; then
   last_bg="$ctx_bg"
 fi
 
-# Segment 6: subscription usage limits (bg by threshold, mauve by default)
+# Segment 6: account slot + subscription usage limits (bg by threshold, mauve by default)
 if [ -n "$limit_segment" ]; then
   printf '%s%s%s' "$(fg "$last_bg")" "$(bg "$limit_bg")" "$SEP"
   printf '%s%s  %s ' "$(fg "$crust")" "$(bg "$limit_bg")" "$limit_segment"

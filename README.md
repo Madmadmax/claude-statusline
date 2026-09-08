@@ -15,6 +15,7 @@ one. Once a window passes 80%, a `↻` countdown to its reset appears beside the
 | git | Branch, plus `✗` when the working tree is dirty. Hidden outside a repository |
 | python | `python3` version, only in Python projects |
 | context | Percentage of the context window in use. The background turns amber at `CTX_WARN` and red at `CTX_DANGER` |
+| **account** | **Name of the active `claude-acc` slot — `work`, `personal` — at the head of the limits segment. Hidden when `claude-acc` is not in use. See [Account slot](#account-slot)** |
 | **limits** | **Subscription usage: `5h` is the session window, `7d` the weekly one. The background follows the worse of the two — amber at `LIMIT_WARN`, red at `LIMIT_DANGER` — and past `LIMIT_COUNTDOWN` the time until reset appears (`↻2h`)** |
 | clock | Hours and minutes |
 
@@ -175,6 +176,23 @@ claude plugin disable mocha-powerline   # turn the plugin off entirely
 `/mocha-powerline:disable` only deletes the `statusLine` key; the `SessionStart` hook will put
 it back next session unless you also disable the plugin.
 
+## Account slot
+
+`claude-acc` is a small helper that keeps several pre-authorized Claude accounts side by side
+and switches between them without a browser: one slot per account, and `~/.claude/auth/.current`
+names the slot in use. The line reads that file and prints the name at the head of the limits
+segment, so whose `5h` and `7d` windows are on screen is never a guess.
+
+Two details:
+
+- With no such file — `claude-acc` not installed, or no slot chosen yet — nothing is shown and
+  the segment behaves exactly as before.
+- A bare `/login` moves the live account without touching the slot, which would leave the name
+  lying. The slot's stored email is compared against `oauthAccount.emailAddress` in
+  `.claude.json`, and a `✗` is appended when the two disagree.
+
+`CLAUDE_CONFIG_DIR` is honoured for both files when it is set.
+
 ## Troubleshooting
 
 | Symptom | Cause |
@@ -182,7 +200,7 @@ it back next session unless you also disable the plugin.
 | Nothing appears at all | `jq` is missing, or `statusLine` never made it into `settings.json` — run `/mocha-powerline:enable` and read what it says |
 | Boxes instead of separators and icons | The terminal is not using a Nerd Font, or the font was installed but not selected in the profile |
 | Colors are flat or wrong | No truecolor. Check with the `printf` test above; `echo $COLORTERM` should print `truecolor` or `24bit` |
-| The limits segment is missing | Expected before the first API response of a session, on API-key billing, and on plans without subscription limits |
+| The limits segment is missing | Expected before the first API response of a session, on API-key billing, and on plans without subscription limits. With `claude-acc` in use the segment still shows the slot name |
 | The git segment is missing | You are not inside a git repository, or `git` is not on `PATH` |
 | The plugin refuses to wire itself | Another status line is already configured — that is deliberate. Delete the `statusLine` key and re-run `/mocha-powerline:enable` |
 
